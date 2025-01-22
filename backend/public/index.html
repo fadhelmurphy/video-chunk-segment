@@ -45,6 +45,7 @@
   <div class="buttons">
     <button onclick="playChunk()">Play via Chunk</button>
     <button onclick="playSegment()">Play via Segment</button>
+    <button onclick="goBackward()">Backward</button>
   </div>
 
   <div class="video-container">
@@ -53,29 +54,60 @@
 
   <script>
     const videoPlayer = document.getElementById('videoPlayer');
-
-    function playChunk() {
-      videoPlayer.src = '/chunk-video';
-      videoPlayer.load();
-      videoPlayer.play();
+    let currentSegment = 0;
+    let segmentURLs = [];
+    
+    // Fungsi untuk mengambil URL segmen
+    async function fetchSegmentURLs() {
+      try {
+        const response = await fetch('/api/segments');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch segment list: ${response.statusText}`);
+        }
+        return await response.json(); // Expecting an array of segment URLs
+      } catch (error) {
+        console.error('Error fetching segment URLs:', error);
+        return [];
+      }
     }
 
-    function playSegment() {
-      videoPlayer.src = '/segments/segment000.mp4'; // Mulai dengan segmen pertama
-      videoPlayer.load();
-      videoPlayer.play();
+    // Fungsi untuk memulai pemutaran segmen
+    async function playSegment() {
+      segmentURLs = await fetchSegmentURLs();
+      if (segmentURLs.length > 0) {
+        videoPlayer.src = segmentURLs[0]; // Mulai dengan segmen pertama
+        videoPlayer.load();
+        videoPlayer.play();
+        currentSegment = 0; // Reset ke segmen pertama
+      }
 
-      let currentSegment = 0;
-      const totalSegments = 10; // Sesuaikan jumlah segmen sesuai hasil FFmpeg
+      const totalSegments = segmentURLs.length;
 
       videoPlayer.addEventListener('ended', () => {
         currentSegment++;
         if (currentSegment < totalSegments) {
-          videoPlayer.src = `/segments/segment${String(currentSegment).padStart(3, '0')}.mp4`;
+          videoPlayer.src = segmentURLs[currentSegment];
           videoPlayer.load();
           videoPlayer.play();
         }
       });
+    }
+
+    // Fungsi untuk memutar mundur ke segmen sebelumnya
+    function goBackward() {
+      if (currentSegment > 0) {
+        currentSegment--;
+        videoPlayer.src = segmentURLs[currentSegment];
+        videoPlayer.load();
+        videoPlayer.play();
+      }
+    }
+
+    // Fungsi untuk memainkan video via chunk
+    function playChunk() {
+      videoPlayer.src = '/chunk-video';
+      videoPlayer.load();
+      videoPlayer.play();
     }
   </script>
 </body>

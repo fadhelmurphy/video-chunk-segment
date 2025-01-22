@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Video Segments</title>
+</head>
+<body>
+    <h1>Video Player with Dynamic Segments</h1>
+    <video id="video" controls autoplay></video>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoElement = document.getElementById('video');
+            const mediaSource = new MediaSource();
+            videoElement.src = URL.createObjectURL(mediaSource);
+
+            async function fetchSegmentURLs() {
+                try {
+                    const response = await fetch('/api/segments');
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch segment list: ${response.statusText}`);
+                    }
+                    return await response.json(); // Expecting an array of segment URLs
+                } catch (error) {
+                    console.error('Error fetching segment URLs:', error);
+                    return [];
+                }
+            }
+
+            mediaSource.addEventListener('sourceopen', async () => {
+                const mimeCodec = 'video/mp4; codecs="avc1.64001F, mp4a.40.2"'; // Change codec for better support
+                if (!MediaSource.isTypeSupported(mimeCodec)) {
+                    console.error('MIME type or codec not supported:', mimeCodec);
+                    mediaSource.endOfStream();
+                    return;
+                }
+
+                const sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+                sourceBuffer.appendWindowStart = 0;
+                sourceBuffer.appendWindowEnd = Infinity;
+                let currentSegmentIndex = 0;
+                let isAppending = false;
+
+                // Fetch the list of segments dynamically
+                const segmentURLs = await fetchSegmentURLs();
+                if (segmentURLs.length === 0) {
+                    console.error('No segments available to load');
+                    mediaSource.endOfStream();
+                    return;
+                }
+
+                const fetchAndAppendSegment = async () => {
+                    if (currentSegmentIndex >= segmentURLs.length) {
+                        if (mediaSource.readyState === 'open') {
+                            console.log('All segments loaded');
+                            mediaSource.endOfStream();
+                        }
+                        return;
+                    }
+
+                    if (isAppending || sourceBuffer.updating) return;
+
+                    isAppending = true;
+                    const segmentURL = segmentURLs[currentSegmentIndex];
+                    console.log(`Fetching segment: ${segmentURL}`);
+
+                    try {
+                        const response = await fetch(segmentURL);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch segment: ${response.statusText}`);
+                        }
+
+                        const data = await response.arrayBuffer();
+                        if (data.byteLength === 0) {
+                            throw new Error(`Segment data is empty: ${segmentURL}`);
+                        }
+
+                        if (mediaSource.readyState === 'open' && !sourceBuffer.updating) {
+                            console.log(`Appending segment: ${segmentURL}`);
+                            sourceBuffer.appendBuffer(data);
+                        } else {
+                            console.log('Buffer is updating or media source not ready');
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching or appending segment ${segmentURL}:`, error);
+                    } finally {
+                        isAppending = false;
+                        currentSegmentIndex++;
+                    }
+                };
+
+                sourceBuffer.addEventListener('updateend', () => {
+                    console.log('updateend event triggered');
+                    fetchAndAppendSegment();
+                });
+
+                sourceBuffer.addEventListener('error', (e) => {
+                    console.error('SourceBuffer error:', e);
+                    console.log('SourceBuffer state:', {
+                        updating: sourceBuffer.updating,
+                        buffered: sourceBuffer.buffered,
+                    });
+                });
+
+                // Start loading the first segment
+                fetchAndAppendSegment();
+            });
+
+            mediaSource.addEventListener('sourceclose', () => {
+                console.log('MediaSource closed');
+            });
+
+            mediaSource.addEventListener('error', (e) => {
+                console.error('MediaSource error:', e);
+            });
+        });
+    </script>
+</body>
+</html>
