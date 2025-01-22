@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #121212;
+      color: white;
+    }
+    .video-container {
+      width: 80%;
+      max-width: 800px;
+      margin-bottom: 20px;
+    }
+    video {
+      width: 100%;
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1558b1;
+    }
+  </style>
+</head>
+<body>
+  <div class="buttons">
+    <button onclick="playChunk()">Play via Chunk</button>
+    <button onclick="playSegment()">Play via Segment</button>
+  </div>
+
+  <div class="video-container">
+    <video id="videoPlayer" controls preload="auto"></video>
+  </div>
+
+  <script>
+    const videoPlayer = document.getElementById('videoPlayer');
+
+    function playChunk() {
+      videoPlayer.src = '/chunk-video';
+      videoPlayer.load();
+      videoPlayer.play();
+    }
+
+    function playSegment() {
+      videoPlayer.src = '/segments/segment000.mp4'; // Mulai dengan segmen pertama
+      videoPlayer.load();
+      videoPlayer.play();
+
+      let currentSegment = 0;
+      const totalSegments = 10; // Sesuaikan jumlah segmen sesuai hasil FFmpeg
+
+      videoPlayer.addEventListener('ended', () => {
+        currentSegment++;
+        if (currentSegment < totalSegments) {
+          videoPlayer.src = `/segments/segment${String(currentSegment).padStart(3, '0')}.mp4`;
+          videoPlayer.load();
+          videoPlayer.play();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
