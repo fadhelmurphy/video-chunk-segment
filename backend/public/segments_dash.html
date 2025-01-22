@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPEG-DASH Player</title>
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    video {
+      width: 80%;
+      height: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>MPEG-DASH Video Player (Segment)</h1>
+  <video id="videoPlayer" controls autoplay></video>
+  <p>Total Segments: <span id="segmentCount">Loading...</span></p>
+  <script>
+    // Ambil total segmen dari API
+    fetch('http://localhost:3000/api/segments/dash/count')
+      .then(response => response.json())
+      .then(data => {
+        const totalSegments = data.totalSegments;
+        document.getElementById('segmentCount').textContent = totalSegments;
+      })
+      .catch(error => {
+        console.error('Error fetching segment count:', error);
+        document.getElementById('segmentCount').textContent = 'Error';
+      });
+
+    // Select the video element
+    const videoPlayer = document.getElementById('videoPlayer');
+
+    // Initialize Dash.js player
+    const player = dashjs.MediaPlayer().create();
+    player.initialize(videoPlayer, 'http://localhost:3000/segments/dash/manifest.mpd', true);
+
+    // Optional: Add events to monitor playback
+    player.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, () => {
+      console.log('Playback started');
+    });
+    player.on(dashjs.MediaPlayer.events.PLAYBACK_PAUSED, () => {
+      console.log('Playback paused');
+    });
+    player.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+      console.error('Error during playback:', e);
+    });
+    // DASH 
+    // ffmpeg -i input.mp4 -map 0 -codec:v libx264 -codec:a aac -f dash dash/manifest.mpd 
+  </script>
+</body>
+</html>

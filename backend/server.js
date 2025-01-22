@@ -40,34 +40,68 @@ app.get('/chunk-video', (req, res) => {
 });
 
 // Folder untuk menyimpan segmen video
-const segmentsPath = path.join(__dirname, 'public/videos/segments');
+const segmentsPath = path.join(__dirname, 'public/videos');
 
 // Middleware untuk melayani file statis (segmen video)
 app.use('/segments', express.static(segmentsPath, {
     setHeaders: (res, path) => {
-        res.setHeader('Content-Type', `video/mp4`);
+        // res.setHeader('Content-Type', `video/mp4`);
         res.setHeader('Accept-Ranges', `bytes`);
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache selama 1 tahun
+        res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache selama 1 hari
     }
 }));
 
-// Endpoint untuk mendapatkan daftar segmen
-app.get('/api/segments', (req, res) => {
-    fs.readdir(segmentsPath, (err, files) => {
-        if (err) {
-            console.error('Error reading segments directory:', err);
-            return res.status(500).json({ error: 'Failed to retrieve segments' });
-        }
-        // Filter hanya file dengan ekstensi .mp4 dan buat URL
-        const segmentURLs = files
-            .filter(file => file.endsWith('.mp4'))
-            .map(file => `/segments/${file}`);
-        res.json(segmentURLs);
+app.get('/api/segments/dash/count', (req, res) => {
+    
+    fs.readdir(`${segmentsPath}/dash`, (err, files) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to read directory' });
+      }
+  
+      const segments = files.filter(file => file.endsWith('.m4s'));
+      
+      res.json({ totalSegments: segments.length });
     });
-});
+  });
 
-// Route untuk mengakses segmen video
-app.use('/segments', express.static(path.join(__dirname, 'public/segments')));
+  app.get('/api/segments/hls/count', (req, res) => {
+    
+    // Baca file dalam direktori
+    fs.readdir(`${segmentsPath}/hls`, (err, files) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to read directory' });
+      }
+  
+      const segments = files.filter(file => file.endsWith('.ts'));
+      
+      res.json({ totalSegments: segments.length });
+    });
+  });
+
+  app.get('/api/segments/hls', (req, res) => {
+    fs.readdir(`${segmentsPath}/hls`, (err, files) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to read directory' });
+      }
+  
+      // Filter hanya file .m4s
+      const segments = files.filter(file => file.endsWith('.ts'));
+      res.json({ segments });
+    });
+  });
+
+
+  app.get('/api/segments/dash', (req, res) => {
+    fs.readdir(`${segmentsPath}/dash`, (err, files) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to read directory' });
+      }
+  
+      // Filter hanya file .m4s
+      const segments = files.filter(file => file.endsWith('.ts'));
+      res.json({ segments });
+    });
+  });
 
 // Static serving
 app.use(express.static(path.join(__dirname, 'public')));

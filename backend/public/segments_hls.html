@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HLS Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script> <!-- Menambahkan HLS.js -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    video {
+      width: 80%;
+      height: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>HLS Video Player</h1>
+  <video id="videoPlayer" controls autoplay></video>
+  <p>Total Segments: <span id="segmentCount">Loading...</span></p>
+  <script>
+    // Ambil total segmen dari API
+    fetch('http://localhost:3000/api/segments/hls/count')
+      .then(response => response.json())
+      .then(data => {
+        const totalSegments = data.totalSegments;
+        document.getElementById('segmentCount').textContent = totalSegments;
+      })
+      .catch(error => {
+        console.error('Error fetching segment count:', error);
+        document.getElementById('segmentCount').textContent = 'Error';
+      });
+
+    // Select the video element
+    const videoPlayer = document.getElementById('videoPlayer');
+
+    // Check if HLS.js is supported
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+
+      // Load the .m3u8 manifest
+      hls.loadSource('http://localhost:3000/segments/hls/manifest.m3u8'); // Pastikan path ini sesuai dengan lokasi manifest.m3u8
+
+      // Attach the HLS.js player to the video element
+      hls.attachMedia(videoPlayer);
+
+      // Optional: Add events to monitor playback
+      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        console.log('Manifest loaded, found ' + data.levels.length + ' quality level(s)');
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error('Error during playback:', data);
+      });
+    } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+      // Fallback to native HLS support in browsers like Safari
+      videoPlayer.src = 'http://localhost:3000/segments/hls/manifest.m3u8';
+    } else {
+      console.error('HLS is not supported in this browser.');
+    }
+    // HLS 
+    // ffmpeg -i input.mp4 -map 0 -codec:v libx264 -codec:a aac -f segment -segment_time 10 -segment_format mpegts -segment_list dash/manifest.m3u8 dash/segment_%03d.ts
+  </script>
+</body>
+</html>
