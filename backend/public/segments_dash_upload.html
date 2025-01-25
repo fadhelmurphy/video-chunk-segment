@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi Bitrate DASH Streaming</title>
+</head>
+<body>
+  <h1>Multi Bitrate DASH Streaming</h1>
+  <form id="upload-form">
+    <input type="file" id="video-file" name="video" accept="video/*" required />
+    <button type="submit">Upload Video</button>
+  </form>
+  <br>
+  <div id="player-container" style="display: none;">
+    <video id="video-player" controls autoplay style="width: 100%;"></video>
+  </div>
+
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+  <script>
+
+const form = document.getElementById('upload-form');
+const videoPlayer = document.getElementById('video-player');
+const playerContainer = document.getElementById('player-container');
+
+form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const videoFile = document.getElementById('video-file').files[0];
+
+    if (!videoFile) {
+        alert('Please select a video file.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('video', videoFile);
+
+    try {
+        const response = await fetch('http://localhost:3000/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        if (data.url) {
+            playerContainer.style.display = 'block';
+            const player = dashjs.MediaPlayer().create();
+            player.initialize(videoPlayer, `http://localhost:3000${data.url}`, true);
+        }
+    } catch (error) {
+        console.error('Error uploading video:', error);
+    }
+});
+
+
+  </script>
+</body>
+</html>

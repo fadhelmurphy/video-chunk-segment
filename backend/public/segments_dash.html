@@ -10,52 +10,169 @@
       font-family: Arial, sans-serif;
       text-align: center;
       padding: 20px;
+      max-width: 1024px;
+      margin: 0 auto;
     }
     video {
-      width: 80%;
+      width: 100%;
+      max-width: 800px;
       height: auto;
       border: 1px solid #ddd;
       border-radius: 8px;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
+    .player-controls {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 15px;
+      align-items: center;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #resolutionSelector, #bitrateInfo, #segmentCount {
+      padding: 5px;
+      margin: 0 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <h1>MPEG-DASH Video Player (Segment)</h1>
-  <video id="videoPlayer" controls autoplay></video>
-  <p>Total Segments: <span id="segmentCount">Loading...</span></p>
+  <h1>MPEG-DASH Video Player</h1>
+  
+  <video id="videoPlayer" controls autoplay preload="metadata"></video>
+  
+  <div class="player-controls">
+    <div class="control-group">
+      <label>Resolusi:</label>
+      <select id="resolutionSelector">
+        <option value="auto">Otomatis</option>
+      </select>
+    </div>
+    
+    <div class="control-group">
+      <label>Info:</label>
+      <span id="bitrateInfo">Kualitas: -</span>
+    </div>
+    
+    <div class="control-group">
+      <label>Segments:</label>
+      <span id="segmentCount">Loading...</span>
+    </div>
+  </div>
+
   <script>
-    // Ambil total segmen dari API
-    fetch('http://localhost:3000/api/segments/dash/count')
-      .then(response => response.json())
-      .then(data => {
-        const totalSegments = data.totalSegments;
-        document.getElementById('segmentCount').textContent = totalSegments;
-      })
-      .catch(error => {
-        console.error('Error fetching segment count:', error);
-        document.getElementById('segmentCount').textContent = 'Error';
-      });
-
-    // Select the video element
     const videoPlayer = document.getElementById('videoPlayer');
+    const resolutionSelector = document.getElementById('resolutionSelector');
+    const bitrateInfo = document.getElementById('bitrateInfo');
+    const segmentCountDisplay = document.getElementById('segmentCount');
 
-    // Initialize Dash.js player
+    let segmentData = {};
+
+    function fetchSegmentData() {
+      return fetch('http://localhost:3000/api/segments/dash/count')
+        .then(response => response.json())
+        .then(data => {
+          if (data.segments) {
+            segmentData = data.segments; // Simpan data segment di variabel global
+            const totalSegments = Object.values(segmentData).reduce((sum, count) => sum + count, 0);
+            segmentCountDisplay.textContent = `Total: ${totalSegments} segments`;
+          } else {
+            segmentCountDisplay.textContent = 'N/A';
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching segment data:', error);
+          segmentCountDisplay.textContent = 'Error';
+        });
+    }
+
+function updateSegmentCount(resolution) {
+  if (resolution === 'auto') {
+    // Totalkan semua segmen dari semua resolusi
+    const totalSegments = Object.values(segmentData).reduce((sum, count) => sum + count, 0);
+    segmentCountDisplay.textContent = `Total: ${totalSegments} segments`;
+  } else {
+    // Cek apakah resolusi yang dipilih ada dalam data segmen
+    const count = segmentData[`${resolution}p`] || 0;
+    segmentCountDisplay.textContent = `${resolution}p: ${count} segments`;
+  }
+}
+    // Inisialisasi Dash.js player
     const player = dashjs.MediaPlayer().create();
     player.initialize(videoPlayer, 'http://localhost:3000/segments/dash/manifest.mpd', true);
 
-    // Optional: Add events to monitor playback
-    player.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, () => {
-      console.log('Playback started');
+    player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function() {
+      const bitrateList = player.getBitrateInfoListFor('video');
+
+      bitrateList.forEach((bitrate, index) => {
+        const option = document.createElement('option');
+        option.value = bitrate.qualityIndex;
+        option.text = `${bitrate.height}p (${Math.round(bitrate.bitrate / 1000)} kbps)`;
+        resolutionSelector.add(option);
+      });
+
+      resolutionSelector.addEventListener('change', function() {
+        if (this.value === 'auto') {
+
+          player.updateSettings({
+            streaming: {
+              abr: {
+                autoSwitchBitrate: {
+                  video: true,
+                }
+              }
+            }
+          });
+          bitrateInfo.textContent = 'Kualitas: Otomatis';
+        } else {
+          const currentTime = player.time();
+          player.updateSettings({
+            streaming: {
+              abr: {
+                autoSwitchBitrate: {
+                  video: false,
+                }
+              },
+            }
+          });
+          player.setQualityFor('video', parseInt(this.value));
+          const selectedBitrate = bitrateList[parseInt(this.value)];
+          bitrateInfo.textContent = `Kualitas: ${selectedBitrate.height}p`;
+
+          // Update segment count
+          updateSegmentCount(selectedBitrate.height);
+        }
+      });
     });
-    player.on(dashjs.MediaPlayer.events.PLAYBACK_PAUSED, () => {
-      console.log('Playback paused');
-    });
-    player.on(dashjs.MediaPlayer.events.ERROR, (e) => {
-      console.error('Error during playback:', e);
-    });
-    // DASH 
-    // ffmpeg -i input.mp4 -map 0 -codec:v libx264 -codec:a aac -f dash dash/manifest.mpd 
+
+    fetchSegmentData();
+//     ffmpeg -i input.mp4 \
+// -filter_complex "[0:v]split=4[v1][v2][v3][v4]; \
+//         [v1]scale=256:144[v1out]; \
+//         [v2]scale=640:360[v2out]; \
+//         [v3]scale=1280:720[v3out]; \
+//         [v4]scale=1920:1080[v4out]" \
+//         -preset fast \
+//         -keyint_min 60 \
+//         -g 60 \
+//         -sc_threshold 0 \
+//         -map "[v1out]" -b:v:0 100k \
+//         -map "[v2out]" -b:v:1 500k \
+//         -map "[v3out]" -b:v:2 1000k \
+//         -map "[v4out]" -b:v:3 3000k \
+//         -map 0:a:0 -b:a 128k \
+//         -c:v libx264 -c:a aac -f dash \
+// -use_template 1 -use_timeline 1 \
+// -adaptation_sets "id=0,streams=v id=1,streams=a" \
+// -init_seg_name "init-\$RepresentationID\$.mp4" \
+// -media_seg_name "chunk-\$RepresentationID\$-\$Number\$.m4s" \
+// dash/manifest.mpd
   </script>
 </body>
 </html>
